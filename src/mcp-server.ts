@@ -86,22 +86,30 @@ export function createBonsaiToolHandlers(opts: BonsaiServerOptions): {
 
     const args = validated.value;
 
-    // In state-only v1 mode the server uses the caller-supplied boundary ids
-    // directly (carried as `anchor_id` / `range_end_id` in the tool input
-    // under the internal contract used by the agent-repo bootstrap). If the
-    // caller did not supply explicit boundary ids, we fall back to using the
-    // patterns as the ids — hosts that do transcript-side pattern resolution
-    // MUST supply the resolved ids explicitly.
+    // Per shared-spec §2: pattern resolution MUST run agent-side before the
+    // tool call is dispatched. The server is pure transport; it never sees
+    // raw patterns. The host is required to supply resolved `anchor_id` /
+    // `range_end_id` derived from its own transcript by calling
+    // `resolveBoundary` (see `guards.ts`) before invoking this tool. If the
+    // host omits them, we fail deterministically — a silent fallback to
+    // patterns-as-ids would silently mutate archive state on ambiguous input.
     const obj = input as Record<string, unknown>;
-    const anchorId =
-      typeof obj['anchor_id'] === 'string' && obj['anchor_id'].length > 0
-        ? (obj['anchor_id'] as string)
-        : args.fromPattern;
-    const rangeEndId =
-      typeof obj['range_end_id'] === 'string' &&
-      obj['range_end_id'].length > 0
-        ? (obj['range_end_id'] as string)
-        : args.toPattern;
+    const rawAnchor = obj['anchor_id'];
+    const rawEnd = obj['range_end_id'];
+    if (typeof rawAnchor !== 'string' || rawAnchor.length === 0) {
+      return errorResult(
+        'anchor_id is required. The host must resolve patterns to a unique ' +
+          'message id before calling context-bonsai-prune (see guards.resolveBoundary).',
+      );
+    }
+    if (typeof rawEnd !== 'string' || rawEnd.length === 0) {
+      return errorResult(
+        'range_end_id is required. The host must resolve patterns to a unique ' +
+          'message id before calling context-bonsai-prune (see guards.resolveBoundary).',
+      );
+    }
+    const anchorId = rawAnchor;
+    const rangeEndId = rawEnd;
 
     const existing = await store.findByAnchor(anchorId);
     if (existing) {
@@ -189,17 +197,26 @@ export const BONSAI_TOOLS = {
 export const BONSAI_TOOL_SCHEMAS = {
   prune: {
     type: 'object',
-    required: ['from_pattern', 'to_pattern', 'summary', 'index_terms'],
+    required: [
+      'from_pattern',
+      'to_pattern',
+      'summary',
+      'index_terms',
+      'anchor_id',
+      'range_end_id',
+    ],
     properties: {
       from_pattern: {
         type: 'string',
         description:
-          'Unique substring identifying the first message of the range to archive.',
+          'Unique substring identifying the first message of the range to archive. ' +
+          'Used by the host to resolve the boundary; never consumed by the server.',
       },
       to_pattern: {
         type: 'string',
         description:
-          'Unique substring identifying the last message of the range to archive.',
+          'Unique substring identifying the last message of the range to archive. ' +
+          'Used by the host to resolve the boundary; never consumed by the server.',
       },
       summary: {
         type: 'string',
@@ -219,12 +236,16 @@ export const BONSAI_TOOL_SCHEMAS = {
       anchor_id: {
         type: 'string',
         description:
-          'Optional explicit anchor id. When omitted, from_pattern is used as the id.',
+          'Resolved id of the first message in the range. The host MUST resolve ' +
+          'from_pattern to a unique message id via its transcript before calling ' +
+          'this tool; raw patterns are not accepted as ids.',
       },
       range_end_id: {
         type: 'string',
         description:
-          'Optional explicit range-end id. When omitted, to_pattern is used as the id.',
+          'Resolved id of the last message in the range. The host MUST resolve ' +
+          'to_pattern to a unique message id via its transcript before calling ' +
+          'this tool; raw patterns are not accepted as ids.',
       },
     },
     additionalProperties: false,

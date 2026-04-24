@@ -67,6 +67,8 @@ describe('MCP server tool handlers', () => {
       to_pattern: 'end',
       summary: 's',
       index_terms: ['foo'],
+      anchor_id: 'a',
+      range_end_id: 'b',
     });
     expect(r1.isError).toBe(true);
     expect(r1.content[0]?.text).toMatch(/from_pattern/);
@@ -76,6 +78,8 @@ describe('MCP server tool handlers', () => {
       to_pattern: 'end',
       summary: '',
       index_terms: ['foo'],
+      anchor_id: 'a',
+      range_end_id: 'b',
     });
     expect(r2.isError).toBe(true);
     expect(r2.content[0]?.text).toMatch(/summary/);
@@ -85,9 +89,54 @@ describe('MCP server tool handlers', () => {
       to_pattern: 'end',
       summary: 's',
       index_terms: [],
+      anchor_id: 'a',
+      range_end_id: 'b',
     });
     expect(r3.isError).toBe(true);
     expect(r3.content[0]?.text).toMatch(/index_terms/);
+  });
+
+  it('prune rejects missing resolved boundary ids deterministically', async () => {
+    const { handlePrune } = createBonsaiToolHandlers({
+      baseDir,
+      sessionId: 'test-session',
+    });
+
+    // Missing anchor_id entirely: the host is required to resolve patterns
+    // to ids before calling. Per shared-spec §2 the server never falls back
+    // to patterns-as-ids and must fail deterministically.
+    const r1 = await handlePrune({
+      from_pattern: 'start',
+      to_pattern: 'end',
+      summary: 's',
+      index_terms: ['x'],
+      range_end_id: 'msg-b',
+    });
+    expect(r1.isError).toBe(true);
+    expect(r1.content[0]?.text).toMatch(/anchor_id is required/);
+
+    // Missing range_end_id.
+    const r2 = await handlePrune({
+      from_pattern: 'start',
+      to_pattern: 'end',
+      summary: 's',
+      index_terms: ['x'],
+      anchor_id: 'msg-a',
+    });
+    expect(r2.isError).toBe(true);
+    expect(r2.content[0]?.text).toMatch(/range_end_id is required/);
+
+    // Empty-string ids also rejected.
+    const r3 = await handlePrune({
+      from_pattern: 'start',
+      to_pattern: 'end',
+      summary: 's',
+      index_terms: ['x'],
+      anchor_id: '',
+      range_end_id: 'msg-b',
+    });
+    expect(r3.isError).toBe(true);
+    expect(r3.content[0]?.text).toMatch(/anchor_id is required/);
   });
 
   it('prune rejects duplicate anchor', async () => {
