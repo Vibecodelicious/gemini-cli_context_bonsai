@@ -1,0 +1,45 @@
+{
+  "name": "gemini-cli-context-bonsai",
+  "version": "0.1.0",
+  "description": "Context Bonsai side project for Gemini CLI: MCP server, bootstrap helpers, guards, archive store, and gauge logic.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./bootstrap": {
+      "types": "./dist/bootstrap.d.ts",
+      "import": "./dist/bootstrap.js"
+    },
+    "./mcp-server-path": {
+      "import": "./dist/mcp-server-path.js"
+    }
+  },
+  "files": [
+    "dist",
+    "STANDARDS.md",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.js && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
