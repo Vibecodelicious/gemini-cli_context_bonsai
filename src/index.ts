@@ -43,12 +43,14 @@ export {
 
 export {
   checkSameStep,
+  isPruneToolWrapperRecord,
   resolveBoundary,
   validatePruneArgs,
   type GuardResult,
   type PruneArgs,
   type ResolvedBoundary,
   type SameStepGuardInput,
+  type ToolCallRecord,
   type TranscriptMessage,
 } from './guards.js';
 

@@ -24,11 +24,45 @@ export interface TranscriptMessage {
   /** Optional: true if this message represents an incomplete/malformed tool call. */
   readonly isIncompleteToolCall?: boolean;
   /**
+   * true if this message is a prior `mcp_context-bonsai_context-bonsai-prune`
+   * tool-use wrapper; resolver MUST exclude these from ambiguous match counts.
+   */
+  readonly isPruneWrapper?: boolean;
+  /**
    * Optional per-turn monotonic step identifier. If two messages share the
    * same step, the guard treats them as belonging to the same model step and
    * rejects same-step retrieve.
    */
   readonly stepId?: string;
+}
+
+/**
+ * Minimal structural shape used to detect prior prune-tool wrapper messages.
+ * Kept narrow on purpose so callers in different agents can pass through
+ * their own richer tool-call record types via structural typing.
+ */
+export interface ToolCallRecord {
+  readonly name: string;
+}
+
+/** The MCP-qualified tool name for the bonsai prune wrapper in Gemini CLI. */
+const PRUNE_WRAPPER_TOOL_NAME = 'mcp_context-bonsai_context-bonsai-prune';
+
+/**
+ * Return true iff the supplied record carries a prior prune-tool wrapper
+ * call. Tolerates a missing `toolCalls` array (returns false). Used to mark
+ * `TranscriptMessage.isPruneWrapper` during snapshot construction so the
+ * resolver can exclude wrappers from ambiguous match counts on retry.
+ */
+export function isPruneToolWrapperRecord(record: {
+  toolCalls?: readonly ToolCallRecord[];
+}): boolean {
+  const calls = record.toolCalls;
+  if (!calls) return false;
+  for (const tc of calls) {
+    if (tc?.name === PRUNE_WRAPPER_TOOL_NAME) return true;
+  }
+  return false;
 }
 
 export interface PruneArgs {
@@ -111,13 +145,26 @@ export function resolveBoundary(
       error: `from_pattern did not match any message: ${args.fromPattern}`,
     };
   }
-  if (fromMatches.length > 1) {
-    return {
-      ok: false,
-      error:
-        `from_pattern is ambiguous (matched ${fromMatches.length} messages). ` +
-        'Refine the pattern to uniquely identify one message.',
-    };
+  // When more than one message matches, exclude prior prune-tool wrappers
+  // before reporting ambiguity. Spec: cross-agent Pattern Matching Contract
+  // (commit cb61f00) — wrappers MUST NOT be counted as ambiguous candidates.
+  let fromIndex: number;
+  if (fromMatches.length === 1) {
+    fromIndex = fromMatches[0] as number;
+  } else {
+    const fromSurvivors = fromMatches.filter(
+      (i) => !transcript[i]?.isPruneWrapper,
+    );
+    if (fromSurvivors.length === 1) {
+      fromIndex = fromSurvivors[0] as number;
+    } else {
+      return {
+        ok: false,
+        error:
+          `from_pattern is ambiguous (matched ${fromMatches.length} messages). ` +
+          'Refine the pattern to uniquely identify one message.',
+      };
+    }
   }
   if (toMatches.length === 0) {
     return {
@@ -125,17 +172,27 @@ export function resolveBoundary(
       error: `to_pattern did not match any message: ${args.toPattern}`,
     };
   }
-  if (toMatches.length > 1) {
-    return {
-      ok: false,
-      error:
-        `to_pattern is ambiguous (matched ${toMatches.length} messages). ` +
-        'Refine the pattern to uniquely identify one message.',
-    };
+  let toIndex: number;
+  if (toMatches.length === 1) {
+    toIndex = toMatches[0] as number;
+  } else {
+    const toSurvivors = toMatches.filter(
+      (i) => !transcript[i]?.isPruneWrapper,
+    );
+    if (toSurvivors.length === 1) {
+      toIndex = toSurvivors[0] as number;
+    } else {
+      return {
+        ok: false,
+        error:
+          `to_pattern is ambiguous (matched ${toMatches.length} messages). ` +
+          'Refine the pattern to uniquely identify one message.',
+      };
+    }
   }
 
-  const startIndex = fromMatches[0] as number;
-  const endIndex = toMatches[0] as number;
+  const startIndex = fromIndex;
+  const endIndex = toIndex;
   if (startIndex > endIndex) {
     return {
       ok: false,

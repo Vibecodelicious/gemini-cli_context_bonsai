@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   checkSameStep,
+  isPruneToolWrapperRecord,
   resolveBoundary,
   validatePruneArgs,
   type PruneArgs,
@@ -154,6 +155,170 @@ describe('resolveBoundary', () => {
     const r = resolveBoundary(t, base);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/pruned/);
+  });
+});
+
+describe('resolveBoundary prune-wrapper filter', () => {
+  // When ambiguity arises from a prior prune-tool wrapper colliding with a
+  // genuine retry pattern, the resolver MUST exclude wrappers from the match
+  // count. Spec: cross-agent Pattern Matching Contract (commit cb61f00).
+
+  it('from filter→1: ambiguous between wrapper + real msg resolves to real msg', () => {
+    const t: TranscriptMessage[] = [
+      tmsg('m1', 'tool:mcp_context-bonsai_context-bonsai-prune args:{"from_pattern":"hello"}', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m2', 'hello there'),
+      tmsg('m3', 'world ends here'),
+    ];
+    const r = resolveBoundary(t, base);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.startId).toBe('m2');
+      expect(r.value.endId).toBe('m3');
+    }
+  });
+
+  it('to filter→1: ambiguous between wrapper + real msg resolves to real msg', () => {
+    const t: TranscriptMessage[] = [
+      tmsg('m1', 'hello there'),
+      tmsg('m2', 'tool:mcp_context-bonsai_context-bonsai-prune args:{"to_pattern":"world"}', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m3', 'world ends here'),
+    ];
+    const r = resolveBoundary(t, base);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.startId).toBe('m1');
+      expect(r.value.endId).toBe('m3');
+    }
+  });
+
+  it('from filter→>1: two real msgs match → still ambiguous', () => {
+    const t: TranscriptMessage[] = [
+      tmsg('m1', 'tool:mcp_context-bonsai_context-bonsai-prune args:{"from_pattern":"hello"}', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m2', 'hello first'),
+      tmsg('m3', 'hello second'),
+      tmsg('m4', 'world ends here'),
+    ];
+    const r = resolveBoundary(t, base);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toMatch(/from_pattern is ambiguous/);
+      // The error must report the unfiltered match count verbatim.
+      expect(r.error).toMatch(/matched 3 messages/);
+    }
+  });
+
+  it('to filter→>1: two real msgs match → still ambiguous', () => {
+    const t: TranscriptMessage[] = [
+      tmsg('m1', 'hello there'),
+      tmsg('m2', 'tool:mcp_context-bonsai_context-bonsai-prune args:{"to_pattern":"world"}', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m3', 'world one'),
+      tmsg('m4', 'world two'),
+    ];
+    const r = resolveBoundary(t, base);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toMatch(/to_pattern is ambiguous/);
+      expect(r.error).toMatch(/matched 3 messages/);
+    }
+  });
+
+  it('from filter→0: only wrappers match → still ambiguous', () => {
+    const t: TranscriptMessage[] = [
+      tmsg('m1', 'tool:mcp_context-bonsai_context-bonsai-prune hello a', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m2', 'tool:mcp_context-bonsai_context-bonsai-prune hello b', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m3', 'world ends here'),
+    ];
+    const r = resolveBoundary(t, base);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toMatch(/from_pattern is ambiguous/);
+      expect(r.error).toMatch(/matched 2 messages/);
+    }
+  });
+
+  it('to filter→0: only wrappers match → still ambiguous', () => {
+    const t: TranscriptMessage[] = [
+      tmsg('m1', 'hello there'),
+      tmsg('m2', 'tool:mcp_context-bonsai_context-bonsai-prune world a', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m3', 'tool:mcp_context-bonsai_context-bonsai-prune world b', {
+        isPruneWrapper: true,
+      }),
+    ];
+    const r = resolveBoundary(t, base);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toMatch(/to_pattern is ambiguous/);
+      expect(r.error).toMatch(/matched 2 messages/);
+    }
+  });
+
+  it('single-match-untouched: one match (a wrapper) resolves to it', () => {
+    const t: TranscriptMessage[] = [
+      tmsg('m1', 'tool:mcp_context-bonsai_context-bonsai-prune hello once', {
+        isPruneWrapper: true,
+      }),
+      tmsg('m2', 'world ends here'),
+    ];
+    const r = resolveBoundary(t, base);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.startId).toBe('m1');
+      expect(r.value.endId).toBe('m2');
+    }
+  });
+});
+
+describe('isPruneToolWrapperRecord', () => {
+  it('returns true when toolCalls contains the qualified prune wrapper name', () => {
+    expect(
+      isPruneToolWrapperRecord({
+        toolCalls: [
+          { name: 'mcp_context-bonsai_context-bonsai-prune' },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('returns false for non-prune tool names', () => {
+    expect(
+      isPruneToolWrapperRecord({
+        toolCalls: [{ name: 'read_file' }, { name: 'edit' }],
+      }),
+    ).toBe(false);
+  });
+
+  it('returns false for an empty toolCalls array', () => {
+    expect(isPruneToolWrapperRecord({ toolCalls: [] })).toBe(false);
+  });
+
+  it('returns false when toolCalls is missing', () => {
+    expect(isPruneToolWrapperRecord({})).toBe(false);
+  });
+
+  it('returns true when at least one entry in a mixed-name array matches', () => {
+    expect(
+      isPruneToolWrapperRecord({
+        toolCalls: [
+          { name: 'read_file' },
+          { name: 'mcp_context-bonsai_context-bonsai-prune' },
+          { name: 'edit' },
+        ],
+      }),
+    ).toBe(true);
   });
 });
 
