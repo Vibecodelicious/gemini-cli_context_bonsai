@@ -68,3 +68,5 @@ export {
 } from './placeholder.js';
 
 export { getMcpServerPath, mcpServerPath } from './mcp-server-path.js';
+
+export { normalizeForStableJson, stableSerialize } from './stable-json.js';
