@@ -1,16 +1,52 @@
-# gemini-cli_context_bonsai
+# Gemini CLI Context Bonsai
 
-Side project for the Context Bonsai Gemini CLI port. Hosts the MCP server, runtime hook-registration library, guards, archive store, and gauge logic. The Gemini CLI agent repo only receives narrow capability-enabling seams (structured hook translator, MCP bootstrap, minimal startup wiring).
+> Warning: This Context Bonsai implementation has not yet been tested with its target agent harness.
 
-## Scope
+Context Bonsai side package for Gemini CLI.
 
-- `src/` — MCP server binary + runtime registration helpers + pure-logic modules
-- `test/` — side-repo tests (vitest)
-- `docs/` — project docs (story plan reference, standards, design notes)
-- `STANDARDS.md` — coding standards authoritative for this side repo
+For the shared explanation of Context Bonsai, see the main project README: https://github.com/Vibecodelicious/context-bonsai-agents
 
-## Related
+## Installation
 
-- Parent planning repo: `context-bonsai-agents`
-- Agent repo (narrow seams only): `gemini-cli`
-- Story plan: `.agents/plans/epic-context-bonsai-agent-ports/story-context-bonsai-agent-ports.2-gemini-hooks-plus-mcp.md` (in parent repo)
+This repo is not a standalone Gemini CLI plugin. It provides hook helpers and an MCP server that must be wired into the Gemini CLI harness.
+
+Add it as a dependency from Gemini CLI during local integration:
+
+```json
+{
+  "dependencies": {
+    "gemini-cli-context-bonsai": "file:../gemini-cli_context_bonsai"
+  }
+}
+```
+
+Build the package before the harness launches the MCP server:
+
+```sh
+npm run build
+```
+
+The Gemini CLI harness must register the Bonsai hooks, launch the built MCP server, provide `CONTEXT_BONSAI_BASE_DIR` and `CONTEXT_BONSAI_SESSION_ID`, and translate Gemini messages into the side package's archive/placeholder flow.
+
+## Usage
+
+The MCP server exposes:
+
+- `context-bonsai-prune`
+- `context-bonsai-retrieve`
+
+The current MCP server stores archive state. The harness integration is responsible for resolving transcript patterns and applying transcript transforms.
+
+## How This Is Implemented For Gemini CLI
+
+The package exports hook registration helpers, MCP server path helpers, archive store utilities, guards, placeholder rendering, and gauge text. The Gemini CLI harness is responsible for connecting those pieces to the live request pipeline.
+
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md).
+
+```sh
+npm run build
+npm run typecheck
+npm test
+```
