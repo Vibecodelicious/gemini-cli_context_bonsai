@@ -24,6 +24,8 @@ npm run typecheck
 npm test
 ```
 
+Run commands from this side repo. Live Gemini CLI validation requires the parent repo layout because the Gemini CLI fork resolves this package as a relative `file:` dependency.
+
 `STANDARDS.md` contains coding standards for this repo.
 
 ## References

@@ -94,14 +94,16 @@ Complete the provider sign-in if prompted, then send the prompt:
 list your tools
 ```
 
-The response should include `context-bonsai-prune` and `context-bonsai-retrieve` among the available tools.
+The response should include the Gemini MCP-prefixed tools `mcp_context-bonsai_context-bonsai-prune` and `mcp_context-bonsai_context-bonsai-retrieve` among the available tools.
 
 ## Usage
 
-Once loaded, Gemini CLI exposes two model-facing tools:
+Once loaded, Gemini CLI exposes two model-facing tools. The side MCP server names are:
 
 - `context-bonsai-prune`
 - `context-bonsai-retrieve`
+
+Gemini CLI displays them to the model with its MCP prefix, such as `mcp_context-bonsai_context-bonsai-prune`.
 
 The model decides when to use those tools based on injected guidance and context-pressure reminders. Pruned ranges are hidden from active model context and replaced with placeholders. Retrieval restores archived ranges.
 
