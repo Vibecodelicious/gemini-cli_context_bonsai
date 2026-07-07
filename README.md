@@ -2,6 +2,8 @@
 
 Context Bonsai support for [Gemini CLI](https://github.com/google-gemini/gemini-cli).
 
+**Status: not yet validated.** The integration code and the install steps below exist, but no end-to-end run against a live Gemini CLI has been performed — running one needs a Gemini credential, and that validation hasn't happened yet. Every other Context Bonsai port has a dated live-verification record; this one does not. Until it does, treat this repo as work in progress rather than a working port. The main project README lists the ports that are verified: https://github.com/Vibecodelicious/context-bonsai-agents
+
 For the shared explanation of Context Bonsai, see the main project README: https://github.com/Vibecodelicious/context-bonsai-agents
 
 ## Architecture note
